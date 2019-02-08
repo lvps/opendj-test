@@ -7,8 +7,9 @@ Vagrant.configure("2") do |config|
 
   config.vm.synced_folder ".", "/vagrant", disabled: true
 
-  config.vm.network "forwarded_port", guest: 10389, host: 1389, host_ip: "127.0.0.1"
-  config.vm.network "forwarded_port", guest: 10636, host: 1636, host_ip: "127.0.0.1"
+  config.vm.network "forwarded_port", guest: 1389, host: 1389, host_ip: "127.0.0.1"
+  config.vm.network "forwarded_port", guest: 1636, host: 1636, host_ip: "127.0.0.1"
+  config.vm.network "forwarded_port", guest: 4444, host: 4444, host_ip: "127.0.0.1"
 
   config.vm.provider "virtualbox" do |v|
 	  v.name = "opendj-test"
@@ -18,7 +19,7 @@ Vagrant.configure("2") do |config|
   end
 
   config.vm.provision "ansible" do |ansible|
-	  ansible.verbose = "v"
+	  #ansible.verbose = "v"
 	  ansible.compatibility_mode = "2.0"
 	  ansible.playbook = "playbook.yml"
   end
