@@ -10,6 +10,7 @@
   - name: install Java 8 (OpenJDK)
     yum: name=java-1.8.0-openjdk state=installed
 
+  # TODO: run with this user, not root...
   - name: add user 'opendj'
     become: true
     user:
@@ -31,41 +32,46 @@
       name: /root/opendj-{{version}}-1.noarch.rpm
       state: present
 
-  # From here onward, this is a rewrite of the run.sh file that installs OpenDJ
+  # From here onward, this is mostly a rewrite of the run.sh file that installs OpenDJ
   # in a Docker container:
   # https://github.com/OpenIdentityPlatform/OpenDJ/blob/master/opendj-packages/opendj-docker/run.sh
 
-  - name: check if old data folder exits
-    stat:
-      path: /opt/opendj/db
-    register: opt_opendj_db
+  # Note that upgrades are already managed by the rpm package, so there's no need to add them here...
 
-  - set_fact:
-      opendj_old_data_folder_exists: opt_opendj_db.stat.exists and opt_opendj_db.stat.isdir
+  # TODO: use a variable and let users choose the data folder?
 
-  - name: create new default data folder (unless one already exists)
-    file:
-      path: /src/www
-      state: directory
-    when: not opendj_old_data_folder_exists
+  #- name: check if old data folder exits
+    #stat:
+      #path: /opt/opendj/db
+    #register: opt_opendj_db
 
-  - name: use new data folder (unless one already exists)
-    copy:
-      content: '/opt/opendj/data'
-      dest: /opt/opendj/instance.loc
-      owner: root
-      group: root
-      mode: 0664
-    when: not opendj_old_data_folder_exists
+  #- set_fact:
+      #opendj_old_data_folder_exists: opt_opendj_db.stat.exists and opt_opendj_db.stat.isdir
+
+  #- name: create new default data folder (unless one already exists)
+    #file:
+      #path: /src/www
+      #state: directory
+    #when: not opendj_old_data_folder_exists
+
+  #- name: use new data folder (unless one already exists)
+    #copy:
+      #content: '/opt/opendj/data'
+      #dest: /opt/opendj/instance.loc
+      #owner: root
+      #group: root
+      #mode: 0664
+    #when: not opendj_old_data_folder_exists
 
   - name: check if instance directory exists
     become: true
     stat:
-      path: /opt/opendj/data/config
-    register: opt_opendj_data_config
+      #path: /opt/opendj/data/config
+      path: /opt/opendj/config
+    register: opt_opendj_config
 
   - set_fact:
-      opendj_instance_exists: "{{ opt_opendj_data_config.stat.exists and opt_opendj_data_config.stat.isdir }}"
+      opendj_instance_exists: "{{ opt_opendj_config.stat.exists and opt_opendj_config.stat.isdir }}"
 
   - name: create bootstrap directory
     become: true
@@ -87,6 +93,7 @@
       mode: 0775
     when: not opendj_instance_exists
 
+  # TODO: use variables for everything. Also, get rid of that script or rewrite it.
   - name: run setup.sh
     become: true
     shell: /opt/opendj/bootstrap/setup.sh
@@ -107,11 +114,7 @@
 
   # TODO: replication
 
-  - name: run upgrade (if previous instance exists)
-    command: /opt/opendj/upgrade -n
-    args:
-      chdir: /opt/opendj
-    when: opendj_instance_exists
+  # TODO: is this "secrets directory" stuff useful outside of a container?
 
   - name: check if secrets directory exists
     stat:
@@ -120,9 +123,6 @@
 
   - set_fact:
       opendj_secret_dir_exists: "{{ opendj_secret_dir.stat.exists and opendj_secret_dir.stat.isdir }}"
-
-  # This exectution path in run.sh terminates with "exec ./bin/start-ds --nodetach",
-  # so everything below this point is "when: not opendj_instance_exists"
 
   - name: find keystores and truststore
     find:
@@ -139,31 +139,9 @@
       - "{{ tmp_secrets.files }}"
     when: not opendj_instance_exists and opendj_secret_dir_exists
 
-  - service_facts:
-    become: true
-    register: services_state
-
-  # Why does run.sh do that? Can we merge the two "run upgrade" tasks here, without conditions?
-
-  - set_fact:
-      opendj_running: services_state.ansible_facts.services['opendj.service'].state == "running"
-
-  - name: run upgrade (if previous instance does not exists)
-    command: /opt/opendj/upgrade -n
-    args:
-      chdir: /opt/opendj
-    when: not opendj_instance_exists and not opendj_running
-
   # End of run.sh rewrite
 
-  - name: restart OpenDJ
-    become: true
-    service:
-      name: opendj
-      state: restarted
-    when: opendj_running
-
-  - name: start and \enable OpenDJ
+  - name: start and enable OpenDJ
     become: true
     service:
       name: opendj
